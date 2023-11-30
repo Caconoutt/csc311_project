@@ -1,5 +1,5 @@
 from utils import *
-
+import matplotlib.pyplot as plt
 import numpy as np
 
 
@@ -24,7 +24,11 @@ def neg_log_likelihood(data, theta, beta):
     # TODO:                                                             #
     # Implement the function as described in the docstring.             #
     #####################################################################
-    log_lklihood = 0.
+    log_lklihood = 0
+    for i, u_id in enumerate(data["user_id"]):
+        #q_id = data["question_id"][i]
+        log_lklihood += data["is_correct"][i]*np.log(sigmoid(theta[u_id]-beta[u_id])) + (1-data["is_correct"][i])*np.log(1-sigmoid(theta[u_id]-beta[u_id]))
+
     #####################################################################
     #                       END OF YOUR CODE                            #
     #####################################################################
@@ -52,7 +56,18 @@ def update_theta_beta(data, lr, theta, beta):
     # TODO:                                                             #
     # Implement the function as described in the docstring.             #
     #####################################################################
-    pass
+    u_id_arr = np.array(data["user_id"])
+    q_id_arr = np.array(data["question_id"])
+    c_id_arr = np.array(data["is_correct"])
+
+    theta_copy = theta.copy()
+    beta_copy = beta.copy()
+    for i in range(len(theta)):
+        theta[i] -= lr * (np.sum(sigmoid(theta_copy[i] - beta_copy)[q_id_arr[u_id_arr == i]]) - np.sum(c_id_arr[u_id_arr == i]))
+
+    for j in range(len(beta)):
+        beta[j] -= lr * (np.sum(c_id_arr[q_id_arr == j]) - np.sum(sigmoid(theta_copy - beta_copy[j])[u_id_arr[q_id_arr == j]]))
+
     #####################################################################
     #                       END OF YOUR CODE                            #
     #####################################################################
@@ -73,20 +88,28 @@ def irt(data, val_data, lr, iterations):
     :return: (theta, beta, val_acc_lst)
     """
     # TODO: Initialize theta and beta.
-    theta = None
-    beta = None
+    theta = np.zeros(542)
+    beta = np.zeros(1774)
 
-    val_acc_lst = []
+    val_acc_lst, train_acc_lst = [], []
+    val_log_likelihood, train_log_likelihood = [], []
 
     for i in range(iterations):
-        neg_lld = neg_log_likelihood(data, theta=theta, beta=beta)
-        score = evaluate(data=val_data, theta=theta, beta=beta)
-        val_acc_lst.append(score)
-        print("NLLK: {} \t Score: {}".format(neg_lld, score))
-        theta, beta = update_theta_beta(data, lr, theta, beta)
+        # Log likelihood
+        train_neg_lld = neg_log_likelihood(data, theta=theta, beta=beta)
+        train_log_likelihood.append(train_neg_lld)
+        val_neg_lld = neg_log_likelihood(val_data, theta=theta, beta=beta)
+        val_log_likelihood.append(val_neg_lld)
 
+        train_score = evaluate(data=data, theta=theta, beta=beta)
+        train_acc_lst.append(train_score)
+        val_score = evaluate(data=val_data, theta=theta, beta=beta)
+        val_acc_lst.append(val_score)
+
+        print("Negative Loglikelihood: {} \t Train Score: {} \t Validation Score: {}".format(train_neg_lld, train_score, val_score))
+        theta, beta = update_theta_beta(data, lr, theta, beta)
     # TODO: You may change the return values to achieve what you want.
-    return theta, beta, val_acc_lst
+    return theta, beta, val_log_likelihood, train_log_likelihood
 
 
 def evaluate(data, theta, beta):
@@ -115,94 +138,31 @@ def main():
     val_data = load_valid_csv("../data")
     test_data = load_public_test_csv("../data")
 
-    #####################################################################
-    # TODO:                                                             #
-    # Tune learning rate and number of iterations. With the implemented #
-    # code, report the validation and test accuracy.                    #
-    #####################################################################
-    pass
-    #####################################################################
-    #                       END OF YOUR CODE                            #
-    #####################################################################
+    # (b) tune hyperparameters and plot neg loglike against iteration
+    lr = 0.01
+    iterations = 10
+    theta, beta, val_loglike, train_loglike = irt(train_data, val_data,lr, iterations)
+    plt.plot(val_loglike, marker = 'o', label="validation")
+    plt.plot(train_loglike, marker = 'x',label="train")
+    plt.xlabel('Number of iterations')
+    plt.ylabel('Negative LogLikelihood')
+    plt.legend()
 
-    #####################################################################
-    # TODO:                                                             #
-    # Implement part (d)                                                #
-    #####################################################################
-    pass
-    #####################################################################
-    #                       END OF YOUR CODE                            #
-    #####################################################################
+    # (c) report validation and test accuracy
+    print("The final validation accuracy is {}\nThe final test accuracy is {}".format(evaluate(val_data, theta, beta),evaluate(test_data, theta, beta)))
+
+    # (d) plot the probability of correctness against theta for three selected questions
+    selected_q = [111,222,999]
+    theta.sort()
+    for q in selected_q:
+        p = sigmoid(theta - beta[q])
+        plt.plot(theta.T,p, label=f"Selected question {q}")
+    plt.xlabel('Theta')
+    plt.ylabel('Probability of correct answer on selected question')
+    plt.legend()
 
 
 if __name__ == "__main__":
     main()
 
 
-
-
-######Archive
-def neg_log_likelihood(data, theta, beta):
-    """ Compute the negative log-likelihood.
-
-    You may optionally replace the function arguments to receive a matrix.
-
-    :param data: matrix 542 x 1774
-    :param theta: Vector 1 x 542
-    :param beta: Vector  1 x 1774
-    :return: float
-    """
-    #####################################################################
-    # TODO:                                                             #
-    # Implement the function as described in the docstring.             #
-    #####################################################################
-    log_lklihood = 0
-    #sparse_matrix = load_train_sparse("data")
-
-    # clean data matrix
-    c = data.astype(int)
-    #value of nan after converted to float
-    c[c==-9223372036854775808] = 0
-
-    theta = theta.reshape((542,1))
-    a = np.tile(theta, (1,1774)) # 542 x 1774
-
-    b = np.tile(beta, (542,1)) # 542 x 1774
-    sig = sigmoid(a - b)
-
-    log_sig = np.log(sig, out=np.zeros_like(sig), where=(sig!=0))
-    log_1_minus_sig = np.log((1-sig), out=np.zeros_like(sig), where=(sig!=0))
-
-    log_lklihood = np.trace(np.dot(data, log_sig.T)) + np.trace(np.dot((1-data), log_1_minus_sig.T))
-
-
-    #####################################################################
-    #                       END OF YOUR CODE                            #
-    #####################################################################
-    return -log_lklihood
-
-
-
-#newest nov.26 10pm
-data = load_train_sparse("data")
-
-N,M = data.shape
-theta = np.zeros((1,N))
-beta = np.zeros((1,M))
-
-# clean data matrix
-denseData = data.todense()
-
-theta = theta.reshape((542,1))
-a = np.tile(theta, (1,1774)) # 542 x 1774
-
-b = np.tile(beta, (542,1)) # 542 x 1774
-sig = sigmoid(a - b)
-log_sig = np.log(sig, out=np.zeros_like(sig), where=(sig!=0))
-log_1_minus_sig = np.log((1-sig), out=np.zeros_like(sig), where=(sig!=0))
-
-t1 = np.multiply(denseData, log_sig)
-t2 = np.multiply(1-denseData, log_1_minus_sig)
-loglikelihood = np.sum(t1+t2)
-print(loglikelihood)
-#print(c_times_sigma.shape)
