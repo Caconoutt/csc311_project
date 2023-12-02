@@ -5,7 +5,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 import torch.utils.data
-
+import matplotlib.pyplot as plt
 import numpy as np
 import torch
 
@@ -66,11 +66,13 @@ class AutoEncoder(nn.Module):
         :return: user vector.
         """
         #####################################################################
-        # TODO:                                                             #
+        # DONE:                                                             #
         # Implement the function as described in the docstring.             #
         # Use sigmoid activations for f and g.                              #
         #####################################################################
-        out = inputs
+        encoded = F.sigmoid(self.g(inputs))
+        out = F.sigmoid(self.h(encoded))
+        # out = inputs
         #####################################################################
         #                       END OF YOUR CODE                            #
         #####################################################################
@@ -90,7 +92,7 @@ def train(model, lr, lamb, train_data, zero_train_data, valid_data, num_epoch):
     :param num_epoch: int
     :return: None
     """
-    # TODO: Add a regularizer to the cost function. 
+    # DONE: Add a regularizer to the cost function.
     
     # Tell PyTorch you are training the model.
     model.train()
@@ -98,8 +100,10 @@ def train(model, lr, lamb, train_data, zero_train_data, valid_data, num_epoch):
     # Define optimizers and loss function.
     optimizer = optim.SGD(model.parameters(), lr=lr)
     num_student = train_data.shape[0]
-
-    for epoch in range(0, num_epoch):
+    training_loss = []
+    validation_accuracy = []
+    x = []
+    for epoch in range(0, num_epoch+1):
         train_loss = 0.
 
         for user_id in range(num_student):
@@ -113,15 +117,25 @@ def train(model, lr, lamb, train_data, zero_train_data, valid_data, num_epoch):
             nan_mask = np.isnan(train_data[user_id].unsqueeze(0).numpy())
             target[0][nan_mask] = output[0][nan_mask]
 
-            loss = torch.sum((output - target) ** 2.)
+            # Here is what I put for regularizer!
+            l2_reg = model.get_weight_norm()
+            loss = torch.sum((output - target) ** 2.) + (lamb/2.) * l2_reg
             loss.backward()
 
             train_loss += loss.item()
             optimizer.step()
+        if epoch % 50 == 0:
+            x.append(epoch)
+            training_loss.append(train_loss)
+            valid_accuracy = evaluate(model, zero_train_data, valid_data)
 
-        valid_acc = evaluate(model, zero_train_data, valid_data)
-        print("Epoch: {} \tTraining Cost: {:.6f}\t "
-              "Valid Acc: {}".format(epoch, train_loss, valid_acc))
+            validation_accuracy.append(valid_accuracy)
+            print("Epoch: {} \tTraining Cost: {:.6f}\t "
+              "Valid Accuracy: {}".format(epoch, train_loss, valid_accuracy))
+
+    return validation_accuracy, training_loss, x
+
+
     #####################################################################
     #                       END OF YOUR CODE                            #
     #####################################################################
@@ -157,21 +171,112 @@ def main():
     zero_train_matrix, train_matrix, valid_data, test_data = load_data()
 
     #####################################################################
-    # TODO:                                                             #
+    # DONE:                                                             #
     # Try out 5 different k and select the best k using the             #
     # validation set.                                                   #
     #####################################################################
     # Set model hyperparameters.
-    k = None
-    model = None
-
+    k_options = [10, 50, 100, 200, 500]
+    # k_options = 50
     # Set optimization hyperparameters.
-    lr = None
-    num_epoch = None
-    lamb = None
+    lr = 0.005
+    # lr_options = [0.001, 0.005, 0.01, 0.1]
+    # lr_options = [0.005, 0.01, 0.02, 0.05]
+    # num_epoch = [100, 250, 500]
 
-    train(model, lr, lamb, train_matrix, zero_train_matrix,
-          valid_data, num_epoch)
+    lamb = 0.0
+
+    dimension = train_matrix.shape[1]
+
+    # this is for Q3(c), picking a k with highest validation accuracy, with same epoch number 200.
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 7))
+    colors = ['crimson', 'darkorange', 'green', 'purple', 'blue', 'tomato', 'gold',
+          ]
+    i = 0
+    for k in k_options:
+
+        epoch_for_k = 500
+        model = AutoEncoder(dimension, k)
+        val_acc, tr_loss,x = train(model, lr, lamb, train_matrix, zero_train_matrix, valid_data, epoch_for_k)
+
+        #x = [0, 50, 100, 150, 200, 250, 300, 350, 400, 450, 500]
+        #x = [0, 25, 50]
+        color = colors[i]
+        ax1.plot(x, val_acc, label=f'k={k}', color=color)
+        ax2.plot(x, tr_loss, label=f'k={k}', color=color)
+        i += 1
+    #this plot tutorial, I found on: https://www.geeksforgeeks.org/matplotlib-axes-axes-set_xlabel-in-python/ and combined my personal experience
+    ax1.set_xlabel('Epoch Value')
+    ax1.set_ylabel('Validation Accuracy')
+    ax1.set_title('Validation Accuracy for various k values, with lr = 0.005', fontweight ='bold')
+    ax1.grid(True)
+    ax1.legend()
+    #
+    ax2.set_xlabel('Epoch')
+    ax2.set_ylabel('Training Loss')
+    ax2.grid(True)
+    ax2.set_title('Training Loss for various k values, with lr = 0.005',fontweight ='bold')
+    ax2.legend()
+
+    plt.tight_layout()
+    plt.show()
+
+    # this is for Q3(c), with k*, displaying learning rate influcence on validatino accuracy.
+    # k_best = 50
+    # fig, ax1 = plt.subplots(3, 2, figsize=(12, 7))
+    # colors = ['crimson', 'green', 'darkorange', 'purple', 'blue', 'tomato', 'gold',
+    #        ]
+    #
+    # row = 0
+    #
+    # for epoch in num_epoch:
+    #     #x = [0, 50, 100, 150, 200, 250, 300, 350, 400, 450, 500]
+    #     i = 0
+    #     for lr in lr_options:
+    #         model = AutoEncoder(dimension, k_best)
+    #         val_acc, tr_loss, x = train(model, lr, lamb, train_matrix, zero_train_matrix, valid_data, epoch)
+    #
+    #         color = colors[i]
+    #         ax1[row][0].plot(x, val_acc, label=f'lr={lr}', color=color)
+    #         ax1[row][1].plot(x, tr_loss, label=f'lr={lr}', color=color)
+    #         i += 1
+    # # this plot tutorial, I found on: https://www.geeksforgeeks.org/matplotlib-axes-axes-set_xlabel-in-python/ and combined my personal experience
+    #     ax1[row][0].set_ylabel('Validation Accuracy')
+    #     ax1[row][0].set_xlabel('Epoch Value')
+    #     ax1[row][0].set_title(f'Validation Accuracy for various learning rate, with epoch number = {epoch}')
+    #     # ax1[row][0].grid(True)
+    #     ax1[row][0].legend()
+    #
+    #     ax1[row][1].set_ylabel('Training Loss')
+    #     ax1[row][1].set_xlabel('Epoch')
+    #     ax1[row][1].set_title(f'Training Loss for various learning rate, with epoch number ={epoch}')
+    #     # ax1[row][1].grid(True)
+    #     ax1[row][1].legend()
+    #     row += 1
+    #
+    # plt.tight_layout()
+    # plt.show()
+
+
+    # this is for Q3(d), find test accuracy:
+    # lamb = 0.0
+    # epoch_for_k = 250
+    # lr = 0.005
+    # k = 10
+    # model = AutoEncoder(dimension, k)
+    # val_acc, tr_loss, x = train(model, lr, lamb, train_matrix, zero_train_matrix, valid_data, epoch_for_k)
+    # fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 7))
+    # # x = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
+    # ax1.plot(x, val_acc, color='blue')
+    # ax1.set_title("Validation Accuracy under optimal")
+    # ax2.plot(x, tr_loss, color='green')
+    # ax2.set_title("Training loss under optimal")
+    # plt.tight_layout()
+    # plt.show()
+
+    # here is to report the test accuracy
+    test = evaluate(model, zero_train_matrix, test_data)
+    print(f"our test accuracy is {test}")
     #####################################################################
     #                       END OF YOUR CODE                            #
     #####################################################################
