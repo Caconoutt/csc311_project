@@ -1,5 +1,6 @@
 from sklearn.impute import KNNImputer
 from utils import *
+import matplotlib.pyplot as plt
 
 
 def knn_impute_by_user(matrix, valid_data, k):
@@ -19,7 +20,7 @@ def knn_impute_by_user(matrix, valid_data, k):
     # We use NaN-Euclidean distance measure.
     mat = nbrs.fit_transform(matrix)
     acc = sparse_matrix_evaluate(valid_data, mat)
-    print("Validation Accuracy: {}".format(acc))
+    #print("Validation Accuracy: {}".format(acc))
     return acc
 
 
@@ -37,7 +38,10 @@ def knn_impute_by_item(matrix, valid_data, k):
     # TODO:                                                             #
     # Implement the function as described in the docstring.             #
     #####################################################################
-    acc = None
+    nbrs = KNNImputer(n_neighbors=k)
+    # We use NaN-Euclidean distance measure.
+    mat = nbrs.fit_transform(matrix.T)
+    acc = sparse_matrix_evaluate(valid_data, mat.T)
     #####################################################################
     #                       END OF YOUR CODE                            #
     #####################################################################
@@ -60,7 +64,35 @@ def main():
     # the best performance and report the test accuracy with the        #
     # chosen k*.                                                        #
     #####################################################################
-    pass
+    # (a)
+    k_values = [1,6,11,16,21,26]
+    acc = []
+    for k in k_values:
+      acc.append(knn_impute_by_user(sparse_matrix, val_data, k))
+    
+    plt.plot(k_values,acc,marker='x')
+    plt.xlabel('Values of k')
+    plt.ylabel('Accuracy on Validation dataset')
+
+    # (b)
+    chosen_k = 11
+    test_acc = knn_impute_by_user(sparse_matrix, test_data, chosen_k)
+    print("With user-based method, the final test accuracy with k* = 11 is {}".format(test_acc))
+
+    # (c)
+    acc = []
+    for k in k_values:
+        acc.append(knn_impute_by_item(sparse_matrix, val_data, k))
+
+    plt.plot(k_values,acc,marker='x')
+    plt.xlabel('Values of k')
+    plt.ylabel('Accuracy on Validation dataset')
+
+    # (d)
+    chosen_k = 21
+    test_acc = knn_impute_by_item(sparse_matrix, test_data, chosen_k)
+    print("With item-based method, the final test accuracy with k* = 21 is {}".format(test_acc))
+
     #####################################################################
     #                       END OF YOUR CODE                            #
     #####################################################################
