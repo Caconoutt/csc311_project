@@ -1,5 +1,4 @@
-import pandas as pd
-
+from matplotlib import pyplot as plt
 from utils import *
 from torch.autograd import Variable
 
@@ -30,9 +29,9 @@ def load_data(base_path="../data"):
     test_data = load_public_test_csv(base_path)
 
     zero_train_matrix = train_matrix.copy()
-    # Fill in the missing entries to 0.
+    
     zero_train_matrix[np.isnan(train_matrix)] = 0
-    # Change to Float Tensor for PyTorch.
+   
     zero_train_matrix = torch.FloatTensor(zero_train_matrix)
     train_matrix = torch.FloatTensor(train_matrix)
 
@@ -47,14 +46,7 @@ class AutoEncoder(nn.Module):
         :param k: int
         """
         super(AutoEncoder, self).__init__()
-
-        # Define linear functions.
-        # self.g1 = nn.Linear(num_question, 800)
-        # self.g2 = nn.Linear(800, k)
-        # self.h1 = nn.Linear(k, 800)
-        # self.h2 = nn.Linear(800, num_question)
-        # self.g = nn.Linear(num_question, k)
-        # self.h = nn.Linear(k, num_question)
+    #here is my update
         self.encoder = nn.Sequential(
             nn.Linear(num_question, 250),
             nn.ReLU(),
@@ -71,13 +63,7 @@ class AutoEncoder(nn.Module):
 
         :return: float
         """
-        # g1_w_norm = torch.norm(self.g1.weight, 2) ** 2
-        # g2_w_norm = torch.norm(self.g2.weight, 2) ** 2
-        # h1_w_norm = torch.norm(self.h1.weight, 2) ** 2
-        # h2_w_norm = torch.norm(self.h2.weight, 2) ** 2
-        # return g1_w_norm + g2_w_norm + h1_w_norm + h2_w_norm
-        # g_w_norm = torch.norm(self.g.weight, 2)
-        # h_w_norm = torch.norm(self.h.weight, 2)
+
         g_w_norm = torch.norm(self.encoder.weight, 2)
         h_w_norm = torch.norm(self.decoder.weight, 2)
         return g_w_norm + h_w_norm
@@ -88,17 +74,7 @@ class AutoEncoder(nn.Module):
         :param inputs: user vector.
         :return: user vector.
         """
-        #####################################################################
-        # TODO:                                                             #
-        # Implement the function as described in the docstring.             #
-        # Use sigmoid activations for f and g.                              #
-        #####################################################################
-        # g2 = torch.nn.functional.sigmoid(self.g1(inputs))
-        # h1 = torch.nn.functional.sigmoid(self.g2(g2))
-        # h2 = torch.nn.functional.sigmoid(self.h1(h1))
-        # out = torch.nn.functional.sigmoid(self.h2(h2))
-        # h = torch.nn.functional.sigmoid(self.g(inputs))
-        # out = torch.nn.functional.sigmoid(self.h(h))
+
         encoded = self.encoder(inputs)
         out = self.decoder(encoded)
         #####################################################################
@@ -107,7 +83,29 @@ class AutoEncoder(nn.Module):
         return out
 
 
-def train(model, lr, lamb, train_data, zero_train_data, valid_data, num_epoch):
+def plots(train_loss_list, valid_acc_list, k):
+    """ save the figure training/validation accuracy/loss curves.
+    :param train_acc_list: training accuracy data
+    :param train_loss_list: training loss data
+    :param valid_acc_list: validation accuracy data
+    :param valid_loss_list: validation loss data
+    :return: None
+    """
+
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 7))
+    data = np.array(valid_acc_list)
+    ax1.plot(data[:, 0], data[:, 1], color='blue')
+    ax1.set_title(f"Validation Accuracy of k = {k}")
+
+
+    data = np.array(train_loss_list)
+    ax2.plot(data[:, 0], data[:, 1], color="orange")
+    ax2.set_title(f"Training Loss of k = {k}")
+    plt.tight_layout()
+    plt.show()
+
+
+def train(model, lr, lamb, train_data, zero_train_data, valid_data, num_epoch,test_data,k):
     """ Train the neural network, where the objective also includes
     a regularizer.
 
@@ -120,14 +118,15 @@ def train(model, lr, lamb, train_data, zero_train_data, valid_data, num_epoch):
     :param num_epoch: int
     :return: None
     """
-    # TODO: Add a regularizer to the cost function. 
-
-    # Tell PyTorch you are training the model.
     model.train()
+    valid_acc_list = []
+    train_loss_list = []
+    max_ = 0
 
     # Define optimizers and loss function.
     optimizer = optim.SGD(model.parameters(), lr=lr)
     num_student = train_data.shape[0]
+    train_data_dict = load_train_csv('../data')
 
     for epoch in range(0, num_epoch):
         train_loss = 0.
@@ -148,10 +147,26 @@ def train(model, lr, lamb, train_data, zero_train_data, valid_data, num_epoch):
 
             train_loss += loss.item()
             optimizer.step()
+        if epoch % 10 == 0:
+            valid_accuracy, valid_loss = evaluate(model, zero_train_data, valid_data)
+            train_acc, train_loss_test = evaluate(model, zero_train_data, train_data_dict)
 
-        valid_acc = evaluate(model, zero_train_data, valid_data)
-        print("Epoch: {} \tTraining Cost: {:.6f}\t "
-              "Valid Acc: {}".format(epoch, train_loss, valid_acc))
+            valid_acc_list.append((epoch, valid_accuracy))
+            train_loss_list.append((epoch, train_loss_test))
+
+            # test_acc, test_loss = evaluate(model, zero_train_data, test_data)
+            # test_acc_list.append(test_acc)
+            print("k = {},Epoch number: {} \tTraining Loss: {:.6f}\t "
+                    "Valid Accuracy: {}".format(k, epoch, train_loss, valid_accuracy))
+
+            if valid_accuracy > max_:
+                max_ = valid_accuracy
+
+    print(f'When k = {k},Max Valid Acc is {max_}')
+   
+
+    plots(train_loss_list, valid_acc_list, k)
+
     #####################################################################
     #                       END OF YOUR CODE                            #
     #####################################################################
@@ -171,40 +186,59 @@ def evaluate(model, train_data, valid_data):
 
     total = 0
     correct = 0
+    loss = 0.
 
     for i, u in enumerate(valid_data["user_id"]):
         inputs = Variable(train_data[u]).unsqueeze(0)
         output = model(inputs)
 
         guess = output[0][valid_data["question_id"][i]].item() >= 0.5
+        target = valid_data["is_correct"][i]
         if guess == valid_data["is_correct"][i]:
             correct += 1
+        loss_tensor = (output[0][valid_data["question_id"][i]] - target) ** 2.
+        loss += loss_tensor.item()
         total += 1
-    return correct / float(total)
+    return correct / float(total), loss
 
 
 def main():
     torch.set_printoptions(threshold=np.inf)
-   
     zero_train_matrix, train_matrix, valid_data, test_data = load_data()
 
+    # Uncomment this to check out how we try out 5 different k and select the best k using the
+    # validation set.
+
     # Set model hyperparameters.
-    k = 10
+    # for k in [10, 50, 100, 150, 200]:
+    #     num_question = train_matrix.shape[1]
+    #
+    #     model = AutoEncoder(num_question=num_question, k=k)
+    #
+    #     # Set optimization hyperparameters.
+    #     lr = 0.0002
+    #     num_epoch = 100
+    #     lamb = None
+    #
+    #     train(model, lr, lamb, train_matrix, zero_train_matrix,
+    #           valid_data, num_epoch,test_data,k)
+
+    #####################################################################
+    #                      Here is the output of optimal                    #
+    #####################################################################
+        # Here is the output for optimal.
+    k = 100
     num_question = train_matrix.shape[1]
-
-    model = AutoEncoder(num_question=num_question, k=10)
-
-    # Set optimization hyperparameters.
+    model = AutoEncoder(num_question=num_question, k=k)
     lr = 0.0002
-    num_epoch = 30
+    num_epoch = 100
     lamb = None
 
-    train(model, lr, lamb, train_matrix, zero_train_matrix,
-          valid_data, num_epoch)
-    #####################################################################
-    #                       END OF YOUR CODE                            #
-    #####################################################################
+    train(model, lr, lamb, train_matrix, zero_train_matrix, valid_data, num_epoch,test_data,k)
 
+    # here is to report the test accuracy
+    test = evaluate(model, zero_train_matrix, test_data)
+    print(f"our test accuracy is {test}")
 
 if __name__ == "__main__":
     main()
