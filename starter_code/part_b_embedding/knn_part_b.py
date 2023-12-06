@@ -1,5 +1,5 @@
 import numpy as np
-
+from tqdm import tqdm
 
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.preprocessing import FunctionTransformer
@@ -77,7 +77,10 @@ def main() -> None:
         accuracies.append(accuracy)
 
     plt.plot(k, accuracies)
-    plt.show()
+    plt.xlabel('k')
+    plt.ylabel('Accuracy')
+    plt.title('Validation Accuracy vs. k Values')
+    plt.savefig('knn_part_b.png', dpi=300)
 
     
 

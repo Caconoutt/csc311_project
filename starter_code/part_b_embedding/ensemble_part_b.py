@@ -134,13 +134,19 @@ def _training(model: nn.Module, dataloader: DataLoader, epochs: int) -> None:
             accuracies.append(accuracy)
     
     epoch_indices = [i * 10 for i in range(epochs // 10)]
+    plt.clf()
     plt.plot(epoch_indices, losses)
     plt.title('Training Loss')
-    plt.show()
+    plt.xlabel('Epoch')
+    plt.ylabel('Loss')
+    plt.savefig(f'{model._get_name()}_loss.png', dpi=300)
 
+    plt.clf()
     plt.plot(epoch_indices, accuracies)
     plt.title('Training Accuracy')
-    plt.show()
+    plt.xlabel('Epoch')
+    plt.ylabel('Accuracy')
+    plt.savefig(f'{model._get_name()}_accuracy.png', dpi=300)
 
     
 def evaluate(model: nn.Module, dataloader: DataLoader) -> Tuple[float, float]:
@@ -210,23 +216,23 @@ def main() -> None:
 
 
 
-    logistic_model = LogisticRegression()
-    logistic_data, logistic_labels = bootstrap_samples[0]
-    train_eval(logistic_model, logistic_data, logistic_labels, val_data,val_labels, 50)
+    # logistic_model = LogisticRegression()
+    # logistic_data, logistic_labels = bootstrap_samples[0]
+    # train_eval(logistic_model, logistic_data, logistic_labels, val_data,val_labels, 50)
 
-    torch.save(logistic_model.state_dict(), 'logistic_model.pth')
+    # torch.save(logistic_model.state_dict(), 'logistic_model.pth')
 
-    neural_network1 = NeuralNetwork()
-    neural_network_data1, neural_network_labels1 = bootstrap_samples[1]
-    train_eval(neural_network1, neural_network_data1, neural_network_labels1, val_data, val_labels, 200)
+    # neural_network1 = NeuralNetwork()
+    # neural_network_data1, neural_network_labels1 = bootstrap_samples[1]
+    # train_eval(neural_network1, neural_network_data1, neural_network_labels1, val_data, val_labels, 200)
 
-    torch.save(neural_network1.state_dict(), 'neural_network1.pth')
+    # torch.save(neural_network1.state_dict(), 'neural_network1.pth')
 
-    neural_network2 = NeuralNetwork()
-    neural_network_data2, neural_network_labels2 = bootstrap_samples[2]
-    train_eval(neural_network2, neural_network_data2, neural_network_labels2, val_data, val_labels, 200)
+    # neural_network2 = NeuralNetwork()
+    # neural_network_data2, neural_network_labels2 = bootstrap_samples[2]
+    # train_eval(neural_network2, neural_network_data2, neural_network_labels2, val_data, val_labels, 200)
 
-    torch.save(neural_network2.state_dict(), 'neural_network2.pth')
+    # torch.save(neural_network2.state_dict(), 'neural_network2.pth')
 
     logistic_model = LogisticRegression()
     logistic_model.load_state_dict(torch.load('logistic_model.pth'))
